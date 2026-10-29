@@ -1,4 +1,9 @@
-<h1 align="center">BetterZenGradientPicker</h1>
+<h1 align="center">BetterZenGradientPicker — Light / Dark</h1>
+
+This fork adds an optional **Separate Light / Dark Gradients** setting. Original mod by [JustADumbPrsn](https://github.com/JustAdumbPrsn/BetterZenGradientPicker); separate appearance support by [b2theh](https://github.com/b2theh).
+
+Install this fork in Sine using **https://github.com/b2theh/BetterZenGradientPicker**. If the original mod is installed, remove it first and restart Zen before installing this fork. Both use the same mod ID and should not run together. This fork retains the original favorites file and preference names.
+
 
 <div align="center">
   <a href="https://zen-browser.app/">
@@ -102,6 +107,30 @@
 
 ---
 
+## Separate Light / Dark Gradients
+
+Enable **Separate Light / Dark Gradients** in the mod's Sine settings. It is disabled by default.
+
+1. Switch Zen appearance to **Light**, open a workspace's gradient picker, and customize the light gradient.
+2. Switch Zen appearance to **Dark** and customize the dark gradient.
+3. Set Zen appearance to **Auto** to follow system appearance, or switch between Light and Dark manually.
+
+Each workspace remembers its own pair, including colors, palette, brightness, opacity, texture, and rotation. When first enabled, the current gradient initializes both variants. Applying a favorite updates the current variant. Switching modes also works with the picker closed.
+
+While enabled, Dynamic Theme and Lightness Inversion are suspended, and text contrast follows Zen's appearance. Their saved preferences are retained. Disabling the option keeps the currently displayed gradient and resumes the original behavior. Re-enabling restores the saved pair; edits made while disabled do not replace it.
+
+This follows appearance changes; it does not set a time-of-day schedule. Configure automatic appearance in your operating system if you want timed changes.
+
+The pairs are stored in local browser preferences under `zen.theme.picker.color-schemes.<workspace UUID>` and survive browser restarts. Private windows keep their edits in memory. These preferences are separate from Zen's workspace themes and the favorites file; Zen workspace sync does not automatically carry the pairs to another device.
+
+Install this fork through Sine using `https://github.com/b2theh/BetterZenGradientPicker`, then restart Zen. You can also toggle the boolean `zen.theme.separate-color-schemes` in `about:config`.
+
+### Verification
+
+Run `node --check BetterZenGradientPicker.uc.js` and `node --test tests/separate-schemes.test.cjs`. The tests exercise the actual feature and hook code with mocked browser APIs; a manual check in Zen is still needed for UI and runtime integration.
+
+---
+
 ## Installation
 
 1. Install **Sine** if you don’t already have it  
@@ -115,7 +144,7 @@
 
 <img width="750" height="493" alt="image" src="https://github.com/user-attachments/assets/3c26c0f1-d6b9-4dbb-b1ec-770823a07d5f" />
 
-7. And paste this github repository link here (Use https://github.com/JustAdumbPrsn/BetterZenGradientPicker)
+7. Paste this fork's repository link: https://github.com/b2theh/BetterZenGradientPicker
 
 <img width="351" height="82" alt="image" src="https://github.com/user-attachments/assets/bac8715e-796e-4496-8609-6515dcfba8d0" />
 

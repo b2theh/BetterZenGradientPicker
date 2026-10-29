@@ -12,6 +12,18 @@
     },
     {
         "type": "checkbox",
+        "property": "zen.theme.separate-color-schemes",
+        "label": "Separate Light / Dark Gradients",
+        "margin": "12px 0 4px 0"
+    },
+    {
+        "type": "text",
+        "label": "Save a separate gradient for each workspace in light and dark mode. Edit each mode to customize it. Follows Zen appearance (and your system when set to Auto). Temporarily overrides Dynamic Theme and Lightness Inversion. Disabled by default.",
+        "margin": "0 0 12px 24px",
+        "size": "12px"
+    },
+    {
+        "type": "checkbox",
         "property": "zen.theme.dynamic-theme-switching",
         "label": "Dynamic Theme",
         "margin": "12px 0 4px 0"

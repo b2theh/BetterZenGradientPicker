@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name           BetterZenGradientPicker
-// @version        2.1
+// @version        2.1.1
 // @description    A Sine mod which aims to overhaul Zen's gradient picker with tons of new features :))
 // @author         JustAdumbPrsn
 // @include        main
@@ -40,10 +40,17 @@
 
   // Lazy load preferences to avoid unnecessary early evaluation
   const lazy = {};
-  XPCOMUtils.defineLazyPreferenceGetter(lazy, "gDynamicThemeSwitching", "zen.theme.dynamic-theme-switching", false);
+  XPCOMUtils.defineLazyPreferenceGetter(lazy, "gDynamicThemeSwitchingPref", "zen.theme.dynamic-theme-switching", false);
   XPCOMUtils.defineLazyPreferenceGetter(lazy, "gTextLock", "zen.theme.text-lock", false);
-  XPCOMUtils.defineLazyPreferenceGetter(lazy, "gLightnessInversion", "zen.theme.lightness-inversion", false);
+  XPCOMUtils.defineLazyPreferenceGetter(lazy, "gLightnessInversionPref", "zen.theme.lightness-inversion", false);
   XPCOMUtils.defineLazyPreferenceGetter(lazy, "gAcrylicElements", "zen.theme.acrylic-elements", false);
+
+  // Separate schemes own the gradient while enabled; retain the user's legacy
+  // settings so disabling the feature restores their previous behavior.
+  Object.defineProperties(lazy, {
+    gDynamicThemeSwitching: { get: () => !Services.prefs.getBoolPref("zen.theme.separate-color-schemes", false) && lazy.gDynamicThemeSwitchingPref },
+    gLightnessInversion: { get: () => !Services.prefs.getBoolPref("zen.theme.separate-color-schemes", false) && lazy.gLightnessInversionPref },
+  });
 
   const OPACITY_EPSILON = 0.001;
   const DEFAULT_ROTATION = -45;
@@ -1878,7 +1885,7 @@
           const appliesHere = !renderingWorkspaceId || renderingWorkspaceId === this.mods.getWorkspace()?.uuid;
           const mode = this.#selectedMode;
           const [colors] = ctx.args;
-          if (!appliesHere || mode?.type !== "explicit-lightness" || !colors.length) {
+          if (this.mods.switchingColorScheme || !appliesHere || mode?.type !== "explicit-lightness" || !colors.length) {
             return;
           }
           const algorithm = ctx.self.useAlgo || "";
@@ -2345,6 +2352,252 @@
         theme.lightness = lightness;
       }
       this.mods.emit("colors-applied", { colors, light });
+    }
+  }
+
+  const SEPARATE_SCHEMES_PREF = "zen.theme.separate-color-schemes";
+  const SCHEME_THEMES_PREF_PREFIX = "zen.theme.picker.color-schemes.";
+
+  // Store native theme snapshots outside workspace.theme: Zen and favorites replace
+  // that object when editing. Preferences also notify other browser windows.
+  class nsZenPickerSeparateSchemes extends nsZenPickerFeature {
+    #mode = null;
+    #switching = false;
+    #writing = false;
+    #wasEnabled = false;
+    #privateRecords = new Map();
+    #isPrivate = false;
+
+    get enabled() {
+      return Services.prefs.getBoolPref(SEPARATE_SCHEMES_PREF, false);
+    }
+
+    get mode() {
+      if (this.#isPrivate) {
+        return "dark";
+      }
+      // Read the pref directly: Zen's cached getter may still be receiving its
+      // notification when handleDarkModeChange calls updateCurrentWorkspace.
+      const scheme = Services.prefs.getIntPref("zen.view.window.scheme", 2);
+      return (scheme === 0 || (scheme !== 1 && window.matchMedia("(prefers-color-scheme: dark)").matches))
+        ? "dark" : "light";
+    }
+
+    init(picker) {
+      super.init(picker);
+      const { PrivateBrowsingUtils } = ChromeUtils.importESModule("resource://gre/modules/PrivateBrowsingUtils.sys.mjs");
+      this.#isPrivate = PrivateBrowsingUtils.isWindowPrivate(window);
+      this.#mode = this.mode;
+      const { hooks } = this.mods;
+      const priority = HOOK_PRIORITY.CORE - 10;
+      for (const pref of [SEPARATE_SCHEMES_PREF, SCHEME_THEMES_PREF_PREFIX, "zen.view.window.scheme"]) {
+        Services.prefs.addObserver(pref, this);
+      }
+      this.listen(window.matchMedia("(prefers-color-scheme: dark)"), "change", () => this.#refresh());
+
+      hooks.add(picker, "updateCurrentWorkspace", "before", ctx => {
+        if (this.enabled && !this.#switching && this.mode !== this.#mode) {
+          // The DOM still contains the outgoing mode's dots. Rebuild it before
+          // Zen can turn those dots into the incoming mode's theme.
+          ctx.skip = true;
+          this.#refresh();
+        }
+      }, priority);
+      hooks.add(picker, "onWorkspaceChange", "before", ctx => {
+        if (!this.enabled || this.#switching) {
+          return;
+        }
+        const [workspace, , preview] = ctx.args;
+        if (!workspace) {
+          return;
+        }
+        if (preview && this.mode === this.#mode) {
+          this.#capture(workspace, preview);
+        }
+        const theme = this.#select(workspace);
+        if (theme) {
+          workspace.theme = theme;
+          // Preserve native null semantics for cache invalidation on commits.
+          if (preview) {
+            ctx.args[2] = theme;
+          }
+        }
+      }, priority);
+      hooks.add(window.gZenWorkspaces, "saveWorkspace", "before", ctx => {
+        if (this.enabled && !this.#switching && this.mode === this.#mode) {
+          this.#capture(ctx.args[0], ctx.args[0]?.theme);
+        }
+      }, priority);
+      hooks.add(picker, "getGradientForWorkspace", "before", ctx => {
+        if (!this.enabled) {
+          return;
+        }
+        const workspace = ctx.args[0];
+        const theme = this.#select(workspace);
+        if (theme && JSON.stringify(theme) !== JSON.stringify(workspace.theme)) {
+          workspace.theme = theme;
+          picker.invalidateGradientCache?.(workspace.uuid);
+        }
+      }, priority);
+      hooks.add(picker, "shouldBeDarkMode", "before", ctx => {
+        if (this.enabled) {
+          ctx.result = this.mode === "dark";
+          ctx.skip = true;
+        }
+      }, HOOK_PRIORITY.DYNAMIC_THEME + 1);
+      this.#refresh();
+    }
+
+    uninit() {
+      for (const pref of [SEPARATE_SCHEMES_PREF, SCHEME_THEMES_PREF_PREFIX, "zen.view.window.scheme"]) {
+        Services.prefs.removeObserver(pref, this);
+      }
+      super.uninit();
+    }
+
+    observe(subject, topic, name) {
+      if (topic !== "nsPref:changed" || this.#writing) {
+        return;
+      }
+      if (name === SEPARATE_SCHEMES_PREF || name === "zen.view.window.scheme") {
+        this.#refresh();
+      } else if (this.enabled) {
+        // Other windows may still be in the middle of saving a workspace.
+        this.mods.scheduler.schedule("scheme-themes-refresh", () => this.#refresh(), 0, { debounce: true });
+      }
+    }
+
+    #key(workspace) {
+      return workspace?.uuid ? SCHEME_THEMES_PREF_PREFIX + encodeURIComponent(workspace.uuid) : null;
+    }
+
+    #clone(theme) {
+      if (!theme || typeof theme !== "object" || !Array.isArray(theme.gradientColors)) {
+        return null;
+      }
+      return JSON.parse(JSON.stringify(theme));
+    }
+
+    #read(workspace) {
+      const key = this.#key(workspace);
+      if (!key) {
+        return null;
+      }
+      const saved = this.#privateRecords.get(key) ?? Services.prefs.getStringPref(key, "");
+      if (saved || Services.prefs.prefHasUserValue(key)) {
+        try {
+          const record = JSON.parse(saved);
+          if (record.version === 1 && this.#clone(record.light) && this.#clone(record.dark)) {
+            return record;
+          }
+        } catch (error) {
+        }
+        // Preserve damaged or newer data instead of overwriting it.
+        return null;
+      }
+      const light = this.#clone(workspace.theme);
+      const dark = this.#clone(workspace.theme);
+      if (!light || !dark) {
+        return null;
+      }
+      const record = { version: 1, light, dark };
+      this.#write(workspace, record);
+      return record;
+    }
+
+    #write(workspace, record) {
+      const key = this.#key(workspace);
+      const value = JSON.stringify(record);
+      if (this.#isPrivate) {
+        this.#privateRecords.set(key, value);
+        return;
+      }
+      if (!key || Services.prefs.getStringPref(key, "") === value) {
+        return;
+      }
+      this.#writing = true;
+      try {
+        Services.prefs.setStringPref(key, value);
+      } finally {
+        this.#writing = false;
+      }
+    }
+
+    #capture(workspace, theme) {
+      const snapshot = this.#clone(theme);
+      if (!snapshot) {
+        return;
+      }
+      const record = this.#read(workspace);
+      if (record) {
+        record[this.#mode] = snapshot;
+        this.#write(workspace, record);
+      }
+    }
+
+    #select(workspace) {
+      const record = this.#read(workspace);
+      return record ? this.#clone(record[this.mode]) : null;
+    }
+
+    #refresh() {
+      if (this.#switching || (!this.enabled && !this.#wasEnabled)) {
+        return;
+      }
+      if (this.mods.isInteracting() || this.picker.draggedDot || this.picker.recentlyDragged) {
+        this.mods.scheduler.schedule("scheme-themes-refresh", () => this.#refresh(), 100, { debounce: true });
+        return;
+      }
+      this.#wasEnabled = this.enabled;
+      this.#switching = true;
+      this.mods.switchingColorScheme = true;
+      try {
+        this.#mode = this.mode;
+        this.mods.cancelGradientValueAnimation();
+        for (const key of ["dyn-update", "dyn-workspace", "dyn-theme", "dyn-post-drag",
+          "dyn-scheme-invert", "dyn-scheme-refresh", "dyn-inversion-commit"]) {
+          this.mods.scheduler.cancel(key);
+        }
+        if (this.enabled) {
+          const workspaces = new Map((window.gZenWorkspaces.getWorkspaces?.() ?? [])
+            .map(workspace => [workspace.uuid, workspace]));
+          const edited = this.mods.getWorkspace();
+          if (edited) {
+            workspaces.set(edited.uuid, edited);
+          }
+          for (const workspace of workspaces.values()) {
+            const theme = this.#select(workspace);
+            if (theme) {
+              const changed = JSON.stringify(workspace.theme) !== JSON.stringify(theme);
+              workspace.theme = theme;
+              if (changed) {
+                window.gZenWorkspaces.saveWorkspace(workspace);
+              }
+              this.picker.invalidateGradientCache?.(workspace.uuid);
+            }
+          }
+        }
+        const edited = this.mods.getWorkspace();
+        const active = window.gZenWorkspaces.getActiveWorkspace?.();
+        // Refresh the visible background as well as an inactive space's editor.
+        const targets = new Map([active, edited].filter(Boolean).map(workspace => [workspace.uuid, workspace]));
+        for (const workspace of targets.values()) {
+          const firstColor = workspace.theme?.gradientColors?.[0];
+          this.mods.emit("palette-restore", {
+            phase: "begin",
+            paletteType: firstColor?.type,
+            lightness: firstColor?.lightness ?? workspace.theme?.lightness ?? 50,
+          });
+          try {
+            this.picker.onWorkspaceChange(workspace);
+          } finally {
+            this.mods.emit("palette-restore", { phase: "end" });
+          }
+        }
+      } finally {
+        this.mods.switchingColorScheme = false;
+        this.#switching = false;
+      }
     }
   }
 
@@ -3576,6 +3829,7 @@
 
     renderingWorkspaceId = null;
     renderingRotation = null;
+    switchingColorScheme = false;
 
     #features = [];
     #picker = null;
@@ -3594,7 +3848,8 @@
         new nsZenPickerPalette(this),
         new nsZenPickerDynamicTheme(this),
         new nsZenPickerGrainReset(this),
-        new nsZenPickerFavorites(this)
+        new nsZenPickerFavorites(this),
+        new nsZenPickerSeparateSchemes(this)
       );
       this.#waitForZen();
     }
@@ -3854,6 +4109,13 @@
         },
         HOOK_PRIORITY.CORE
       );
+    }
+
+    cancelGradientValueAnimation() {
+      this.#valueAnimationToken++;
+      if (this.opacityFeature) {
+        this.opacityFeature.isAnimating = false;
+      }
     }
 
     animateGradientValues(toOpacity, toTexture, onDone) {
