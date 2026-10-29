@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name           BetterZenGradientPicker
-// @version        2.1.1
+// @version        2.1.2
 // @description    A Sine mod which aims to overhaul Zen's gradient picker with tons of new features :))
 // @author         JustAdumbPrsn
 // @include        main
@@ -18,6 +18,8 @@
   const { XPCOMUtils } = ChromeUtils.importESModule(
     "resource://gre/modules/XPCOMUtils.sys.mjs"
   );
+
+  const INDEPENDENT_COLORS_PREF = "zen.theme.independent-color-points";
 
   const LEGACY_ROTATION_PREF_PREFIX = "zen.theme.rotation.";
   const LEGACY_FAVORITES_PREF = "zen.theme.picker.favorites";
@@ -1077,9 +1079,14 @@
     #flushingMove = false;
     #originalHarmonies = null;
 
+    get independent() {
+      return Services.prefs.getBoolPref(INDEPENDENT_COLORS_PREF, false);
+    }
+
     init(picker) {
       super.init(picker);
       const { hooks } = this.mods;
+      Services.prefs.addObserver(INDEPENDENT_COLORS_PREF, this);
 
       this.#originalHarmonies = Object.getOwnPropertyDescriptor(
         Object.getPrototypeOf(picker),
@@ -1098,12 +1105,29 @@
 
       this.listen(picker.panel, "popupshowing", () => this.#syncFromWorkspace());
       this.listen(this.mods.events, "harmony-mode", event => {
-        picker.useAlgo = event.detail.algorithm;
         this.#setHarmonyMode(event.detail.algorithm);
       });
+      hooks.add(picker, "onWorkspaceChange", "after", () => this.#updateIndependentUI(), HOOK_PRIORITY.HARMONY);
+      this.#syncFromWorkspace();
+      this.#updateIndependentUI();
+    }
+
+    observe(subject, topic) {
+      if (topic === "nsPref:changed") {
+        this.#syncFromWorkspace();
+        this.#updateIndependentUI();
+      }
+    }
+
+    #updateIndependentUI() {
+      const button = document.getElementById("PanelUI-zen-gradient-generator-color-toggle-algo");
+      if (button) {
+        button.disabled = this.independent || this.picker.dots.length < 2;
+      }
     }
 
     uninit() {
+      Services.prefs.removeObserver(INDEPENDENT_COLORS_PREF, this);
       cancelAnimationFrame(this.#moveRaf);
       if (this.#originalHarmonies) {
         Object.defineProperty(this.picker, "colorHarmonies", this.#originalHarmonies);
@@ -1114,6 +1138,8 @@
     }
 
     #setHarmonyMode(algorithm) {
+      algorithm = this.independent ? "floating" : algorithm;
+      this.picker.useAlgo = algorithm;
       const isFloating = algorithm === "floating";
       this.#floatingActive = isFloating;
       if (isFloating) {
@@ -1124,6 +1150,10 @@
     }
 
     #syncFromWorkspace() {
+      if (this.independent) {
+        this.#setHarmonyMode("floating");
+        return;
+      }
       const colors = this.mods.getWorkspace()?.theme?.gradientColors;
       const algorithm = colors?.[0]?.algorithm;
       if (!Array.isArray(colors) || colors.length < 2 || !algorithm) {
@@ -1207,6 +1237,23 @@
       const [dots, action = "update", useHarmony = ""] = ctx.args;
       const { width, height } = this.mods.getGradientSize();
       const center = { x: width / 2, y: height / 2 };
+
+      if (this.independent) {
+        this.#setHarmonyMode("floating");
+        // Zen has already moved the dragged dot (or removed the deleted one).
+        // Preserve every other position, even when the point count changes.
+        const result = [...dots];
+        if (action === "add" && dots.length < MAX_DOTS) {
+          result.push({
+            ID: dots.length,
+            position: { ...center },
+            type: dots[0]?.type || "explicit-lightness",
+          });
+        }
+        ctx.result = result;
+        ctx.skip = true;
+        return;
+      }
 
       if (action === "add" || action === "remove") {
         const targetAngleCount = Math.max(0, dots.length + (action === "add" ? 1 : 0) - 1);

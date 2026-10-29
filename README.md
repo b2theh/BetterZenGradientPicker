@@ -107,6 +107,12 @@ Install this fork in Sine using **https://github.com/b2theh/BetterZenGradientPic
 
 ---
 
+## Independent Color Points
+
+Enable **Independent Color Points** in the mod's Sine settings to drag any color point without moving the others. Adding and removing points also preserves the remaining positions. This overrides color harmonies while enabled, and the harmony button is disabled. It works with separate light/dark gradients and favorites.
+
+Point movements are saved using the existing Floating harmony. Disabling the option lets you choose a linked harmony again with the harmony button; it does not rearrange your colors automatically. Brightness, opacity and texture remain gradient-wide controls. Select the Full palette if you want point distance from the center to control brightness individually.
+
 ## Separate Light / Dark Gradients
 
 Enable **Separate Light / Dark Gradients** in the mod's Sine settings. It is disabled by default.
@@ -127,7 +133,7 @@ Install this fork through Sine using `https://github.com/b2theh/BetterZenGradien
 
 ### Verification
 
-Run `node --check BetterZenGradientPicker.uc.js` and `node --test tests/separate-schemes.test.cjs`. The tests exercise the actual feature and hook code with mocked browser APIs; a manual check in Zen is still needed for UI and runtime integration.
+Run `node --check BetterZenGradientPicker.uc.js` and `node --test tests/*.test.cjs`. The tests exercise the actual feature and hook code with mocked browser APIs; a manual check in Zen is still needed for UI and runtime integration.
 
 ---
 

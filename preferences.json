@@ -24,6 +24,18 @@
     },
     {
         "type": "checkbox",
+        "property": "zen.theme.independent-color-points",
+        "label": "Independent Color Points",
+        "margin": "12px 0 4px 0"
+    },
+    {
+        "type": "text",
+        "label": "Move each color point freely without moving the others. Overrides color harmonies while enabled. Adding or removing points keeps the remaining colors in place. Brightness, opacity and texture controls still apply to the whole gradient.",
+        "margin": "0 0 12px 24px",
+        "size": "12px"
+    },
+    {
+        "type": "checkbox",
         "property": "zen.theme.dynamic-theme-switching",
         "label": "Dynamic Theme",
         "margin": "12px 0 4px 0"
