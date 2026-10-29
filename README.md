@@ -107,11 +107,11 @@ Install this fork in Sine using **https://github.com/b2theh/BetterZenGradientPic
 
 ---
 
-## Custom Active Tab Color
+## Active Tab palette
 
-Enable **Custom Active Tab Color** in Sine settings. Choose the active tab's color with the new color picker in the gradient editor, or enter `#RRGGBB` / `#RGB` values in **Active Tab — Light** and **Active Tab — Dark**. The color picker edits the current appearance's color. Both colors apply across workspaces, independently of their gradients and of the Separate Light / Dark Gradients toggle.
+Open the gradient picker and find **Active Tab** directly below the gradient presets, above the sliders. Click a colored swatch to apply it immediately, or click **+** to choose any color from the visual color picker. No setup checkbox or color codes are needed. **Auto** restores Zen's normal selection styling without deleting your custom colors.
 
-Selected regular, pinned, and Essential tabs use this color. The text automatically uses black or white for contrast. Turning the setting off restores Zen's normal tab styling. Invalid HEX input temporarily falls back to normal styling for that mode. Other interface accents keep their existing behavior.
+The title shows whether you are editing the **Light** or **Dark** color. Both colors apply across workspaces and are remembered independently of their gradients. The preview shows the selection color and its automatic black/white text contrast. Regular, pinned, and Essential active tabs use this color. Other interface accents retain their existing behavior. Previously saved custom colors are preserved.
 
 ## Independent Color Points
 

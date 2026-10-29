@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name           BetterZenGradientPicker
-// @version        2.1.3
+// @version        2.1.4
 // @description    A Sine mod which aims to overhaul Zen's gradient picker with tons of new features :))
 // @author         JustAdumbPrsn
 // @include        main
@@ -3076,6 +3076,9 @@
     #input = null;
     #label = null;
     #inputMode = null;
+    #automatic = null;
+    #preview = null;
+    #swatches = [];
 
     init(picker) {
       super.init(picker);
@@ -3128,8 +3131,14 @@
       const mode = this.#mode();
       const color = this.#color(mode);
       if (this.#row) {
-        this.#row.hidden = !enabled;
-        this.#label.textContent = `Active tab color — ${mode === "dark" ? "Dark" : "Light"}`;
+        this.#label.textContent = `Active Tab · ${mode === "dark" ? "Dark" : "Light"}`;
+        this.#automatic.setAttribute("aria-pressed", String(!enabled));
+        this.#row.setAttribute("custom-color", String(enabled && Boolean(color)));
+        for (const swatch of this.#swatches) {
+          swatch.button.setAttribute("aria-pressed", String(enabled && color === swatch.color));
+        }
+        this.#preview.style.setProperty("--preview-color", enabled && color ? color : "var(--zen-toolbar-element-bg)");
+        this.#preview.style.setProperty("--preview-text", enabled && color ? tabAccentTextColor(color) : "inherit");
         // Keep the color dialog's original target if appearance changes while open.
         if (!this.#inputMode) {
           this.#input.value = color ?? TAB_ACCENT_DEFAULTS[mode];
@@ -3145,37 +3154,99 @@
       root.setAttribute("bzgp-custom-tab-accent", "true");
     }
 
+    #chooseColor(color, mode = this.#mode()) {
+      const normalized = normalizeTabAccent(color);
+      if (!normalized) {
+        return;
+      }
+      Services.prefs.setStringPref(`${TAB_ACCENT_PREF}.${mode}`, normalized);
+      Services.prefs.setBoolPref(TAB_ACCENT_PREF + ".enabled", true);
+    }
+
     #buildControl() {
       const controls = document.getElementById("PanelUI-zen-gradient-generator-controls");
       if (!controls) {
         return;
       }
-      this.#row = document.createXULElement("hbox");
+      const html = tag => document.createElementNS("http://www.w3.org/1999/xhtml", tag);
+      this.#row = document.createXULElement("vbox");
       this.#row.id = "zen-picker-tab-accent-row";
+      this.#row.setAttribute("role", "group");
+      this.#row.setAttribute("aria-labelledby", "zen-picker-tab-accent-label");
+      const header = document.createXULElement("hbox");
+      header.className = "zen-picker-tab-accent-header";
       this.#label = document.createXULElement("label");
-      this.#label.setAttribute("control", "zen-picker-tab-accent-input");
-      this.#input = document.createElementNS("http://www.w3.org/1999/xhtml", "input");
+      this.#label.id = "zen-picker-tab-accent-label";
+      this.#automatic = html("button");
+      this.#automatic.id = "zen-picker-tab-accent-auto";
+      this.#automatic.type = "button";
+      this.#automatic.textContent = "Auto";
+      this.#automatic.title = "Use Zen’s automatic tab color";
+      this.listen(this.#automatic, "click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+        Services.prefs.setBoolPref(TAB_ACCENT_PREF + ".enabled", false);
+      });
+      header.append(this.#label, this.#automatic);
+
+      const palette = html("div");
+      palette.className = "zen-picker-tab-accent-palette";
+      const colors = [
+        ["Coral", "#f87171"], ["Orange", "#fb923c"], ["Amber", "#fbbf24"],
+        ["Green", "#4ade80"], ["Teal", "#2dd4bf"], ["Sky", "#38bdf8"],
+        ["Blue", "#60a5fa"], ["Violet", "#a78bfa"], ["Pink", "#f472b6"],
+        ["Slate", "#94a3b8"], ["Charcoal", "#334155"],
+      ];
+      for (const [name, color] of colors) {
+        const button = html("button");
+        button.type = "button";
+        button.className = "zen-picker-tab-accent-swatch";
+        button.title = name;
+        button.setAttribute("aria-label", `${name} active tab color`);
+        button.style.setProperty("--swatch-color", color);
+        this.listen(button, "click", event => {
+          event.preventDefault();
+          event.stopPropagation();
+          this.#chooseColor(color);
+        });
+        this.#swatches.push({ button, color });
+        palette.append(button);
+      }
+
+      const custom = html("label");
+      custom.className = "zen-picker-tab-accent-custom";
+      custom.title = "Choose any color";
+      const plus = html("span");
+      plus.textContent = "+";
+      plus.setAttribute("aria-hidden", "true");
+      this.#input = html("input");
       this.#input.id = "zen-picker-tab-accent-input";
       this.#input.type = "color";
-      this.#input.setAttribute("aria-label", "Active tab color");
+      this.#input.setAttribute("aria-label", "Choose any active tab color");
       this.listen(this.#input, "click", event => {
         event.stopPropagation();
         this.#inputMode = this.#mode();
       });
       this.listen(this.#input, "input", () => {
-        const color = normalizeTabAccent(this.#input.value);
-        if (color) {
-          Services.prefs.setStringPref(`${TAB_ACCENT_PREF}.${this.#inputMode ?? this.#mode()}`, color);
-        }
+        this.#chooseColor(this.#input.value, this.#inputMode ?? this.#mode());
       });
       for (const event of ["change", "cancel"]) {
-        this.listen(this.#input, event, () => {
+        this.listen(this.#input, event, event => {
+          if (event.type === "change") {
+            this.#chooseColor(this.#input.value, this.#inputMode ?? this.#mode());
+          }
           this.#inputMode = null;
           this.#update();
         });
       }
-      this.#row.append(this.#label, this.#input);
-      controls.append(this.#row);
+      custom.append(plus, this.#input);
+      palette.append(custom);
+      this.#preview = html("div");
+      this.#preview.id = "zen-picker-tab-accent-preview";
+      this.#preview.textContent = "Active tab";
+      this.#row.append(header, palette, this.#preview);
+      // Keep the visual choice beside the gradient presets, above the sliders.
+      controls.before(this.#row);
     }
   }
 

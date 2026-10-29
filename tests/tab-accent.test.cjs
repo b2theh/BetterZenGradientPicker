@@ -22,6 +22,7 @@ function prefs(initial = {}) {
       const index = observers.findIndex(item => item.prefix === prefix && item.observer === observer);
       if (index >= 0) observers.splice(index, 1);
     },
+    setBoolPref(key, value) { this.setStringPref(key, value); },
     setStringPref(key, value) {
       values.set(key, value);
       for (const { prefix, observer } of [...observers]) {
@@ -41,6 +42,7 @@ class Element extends EventTarget {
   setAttribute(key, value) { this.attributes.set(key, value); }
   removeAttribute(key) { this.attributes.delete(key); }
   append(...children) { this.children.push(...children); }
+  before(...elements) { this.beforeElements = elements; }
   remove() { this.removed = true; }
 }
 function browser({ shared = prefs(), systemDark = false, privateWindow = false } = {}) {
@@ -57,8 +59,12 @@ function browser({ shared = prefs(), systemDark = false, privateWindow = false }
   });
   vm.runInContext(implementation, context);
   const feature = new context.Feature({}); feature.init({ panel });
-  const row = controls.children[0]; const [label, input] = row.children;
-  return { root, row, label, input, shared, feature, normalize: context.normalize, textColor: context.textColor,
+  const row = controls.beforeElements[0];
+  const [header, palette, preview] = row.children;
+  const [label, automatic] = header.children;
+  const swatches = palette.children.slice(0, -1);
+  const input = palette.children.at(-1).children[1];
+  return { root, row, label, input, automatic, swatches, preview, shared, feature, normalize: context.normalize, textColor: context.textColor,
     color: () => root.properties.get('--bzgp-active-tab-color'),
     text: () => root.properties.get('--bzgp-active-tab-text'),
     set: (key, value) => shared.setStringPref(key, value),
@@ -70,9 +76,9 @@ function enabled(options = {}) {
   return browser({ shared: prefs({ [PREFIX + '.enabled']: true, 'zen.view.window.scheme': 1 }), ...options });
 }
 
-test('disabled by default leaves all existing accent and background properties untouched', () => {
+test('palette is visible by default and leaves existing styling untouched until a color is chosen', () => {
   const b = browser();
-  assert.equal(b.row.hidden, true);
+  assert.notEqual(b.row.hidden, true);
   assert.equal(b.root.attributes.has('bzgp-custom-tab-accent'), false);
   assert.equal(b.root.properties.size, 0);
 });
@@ -126,7 +132,7 @@ test('invalid color falls back to native styling, and disabling removes only own
   assert.equal(b.color(), '#abcdef');
   b.set(PREFIX + '.enabled', false);
   assert.equal(b.color(), undefined);
-  assert.equal(b.row.hidden, true);
+  assert.notEqual(b.row.hidden, true);
   assert.equal(b.root.properties.get('--zen-primary-color'), '#abcdef');
 });
 
@@ -164,4 +170,53 @@ test('private windows follow Zen dark appearance; uninit cleans UI, styles and o
   assert.equal(b.color(), undefined);
   b.set(PREFIX + '.dark', '#ffffff'); b.dark(true);
   assert.equal(b.color(), undefined);
+});
+
+test('a visual swatch enables custom color without visiting Sine settings', () => {
+  const b = browser();
+  assert.equal(b.automatic.attributes.get('aria-pressed'), 'true');
+  b.swatches[0].dispatchEvent(new Event('click'));
+  assert.equal(b.color(), '#f87171');
+  assert.equal(b.shared.getBoolPref(PREFIX + '.enabled'), true);
+  assert.equal(b.swatches[0].attributes.get('aria-pressed'), 'true');
+  assert.equal(b.swatches[1].attributes.get('aria-pressed'), 'false');
+  assert.equal(b.preview.properties.get('--preview-color'), '#f87171');
+  assert.equal(b.automatic.attributes.get('aria-pressed'), 'false');
+});
+
+test('Auto restores the native tab style and preserves saved colors and visible palette', () => {
+  const b = browser();
+  b.select('#123456');
+  b.automatic.dispatchEvent(new Event('click'));
+  assert.equal(b.color(), undefined);
+  assert.notEqual(b.row.hidden, true);
+  assert.equal(b.automatic.attributes.get('aria-pressed'), 'true');
+  assert.equal(b.shared.getStringPref(PREFIX + '.light'), '#123456');
+  b.select('#abcdef');
+  assert.equal(b.color(), '#abcdef');
+});
+
+test('swatches edit only the current mode and leave the other saved color intact', () => {
+  const b = enabled();
+  b.select('#123456');
+  b.set('zen.view.window.scheme', 0);
+  b.swatches[3].dispatchEvent(new Event('click'));
+  assert.equal(b.color(), '#4ade80');
+  b.set('zen.view.window.scheme', 1);
+  assert.equal(b.color(), '#123456');
+});
+
+test('a picker that emits only change still saves and enables the chosen color', () => {
+  const b = browser();
+  b.input.value = '#123456'; b.input.dispatchEvent(new Event('change'));
+  assert.equal(b.color(), '#123456');
+  assert.equal(b.shared.getBoolPref(PREFIX + '.enabled'), true);
+});
+
+test('cancelling the native picker leaves automatic styling and stored colors unchanged', () => {
+  const b = browser();
+  b.input.dispatchEvent(new Event('click'));
+  b.input.value = '#123456'; b.input.dispatchEvent(new Event('cancel'));
+  assert.equal(b.color(), undefined);
+  assert.equal(b.shared.getBoolPref(PREFIX + '.enabled', false), false);
 });

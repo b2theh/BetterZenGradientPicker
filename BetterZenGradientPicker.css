@@ -701,22 +701,120 @@
   color: var(--bzgp-active-tab-text) !important;
 }
 
+/* Active Tab visual palette: always available in the main picker. */
 #zen-picker-tab-accent-row {
+  display: flex;
+  flex-direction: column;
+  margin: 8px var(--panel-padding, 10px) 12px;
+  padding: 12px;
+  border: 1px solid var(--zen-picker-slot-border);
+  border-radius: 14px;
+  background: var(--zen-picker-slot-surface);
+  gap: 10px;
+}
+
+.zen-picker-tab-accent-header {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px var(--panel-padding, 10px);
 }
 
-#zen-picker-tab-accent-row[hidden] {
-  display: none !important;
+#zen-picker-tab-accent-label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#zen-picker-tab-accent-auto {
+  appearance: none;
+  border: 1px solid var(--zen-picker-slot-border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+#zen-picker-tab-accent-auto[aria-pressed="true"] {
+  background: var(--zen-picker-hover-surface);
+  font-weight: 600;
+}
+
+.zen-picker-tab-accent-palette {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  justify-items: center;
+}
+
+.zen-picker-tab-accent-swatch,
+.zen-picker-tab-accent-custom {
+  appearance: none;
+  box-sizing: border-box;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: var(--swatch-color);
+  background-clip: padding-box;
+  cursor: pointer;
+  transition: transform 120ms ease;
+}
+
+.zen-picker-tab-accent-swatch:hover,
+.zen-picker-tab-accent-custom:hover {
+  transform: scale(1.1);
+}
+
+.zen-picker-tab-accent-swatch[aria-pressed="true"] {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.zen-picker-tab-accent-custom {
+  background: conic-gradient(#f87171, #fbbf24, #4ade80, #38bdf8, #a78bfa, #f472b6, #f87171);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 600;
+  text-shadow: 0 1px 3px #0009;
 }
 
 #zen-picker-tab-accent-input {
-  width: 44px;
-  height: 28px;
-  padding: 2px;
-  border: 1px solid var(--zen-picker-slot-border);
-  border-radius: 6px;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
   cursor: pointer;
+}
+
+.zen-picker-tab-accent-swatch:focus-visible,
+#zen-picker-tab-accent-auto:focus-visible,
+.zen-picker-tab-accent-custom:focus-within {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+#zen-picker-tab-accent-preview {
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--preview-color);
+  color: var(--preview-text);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zen-picker-tab-accent-swatch,
+  .zen-picker-tab-accent-custom {
+    transition: none;
+  }
 }
