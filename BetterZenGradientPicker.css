@@ -679,3 +679,44 @@
   border-radius: 50% !important;
   corner-shape: round !important;
 }
+/* Optional active-tab color, scoped away from Zen's global accent tokens. */
+:root[bzgp-custom-tab-accent="true"] #tabbrowser-tabs .tabbrowser-tab[visuallyselected] {
+  --tab-background-color-selected: var(--bzgp-active-tab-color) !important;
+  --tab-selected-bgcolor: var(--bzgp-active-tab-color) !important;
+  --tab-text-color-selected: var(--bzgp-active-tab-text) !important;
+  --tab-selected-textcolor: var(--bzgp-active-tab-text) !important;
+  color: var(--bzgp-active-tab-text) !important;
+}
+
+:root[bzgp-custom-tab-accent="true"] #tabbrowser-tabs .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-background,
+:root[bzgp-custom-tab-accent="true"] #tabbrowser-tabs .tabbrowser-tab[visuallyselected][zen-essential] > .tab-stack > .tab-background::before {
+  background: var(--bzgp-active-tab-color) !important;
+}
+
+:root[bzgp-custom-tab-accent="true"] #tabbrowser-tabs .tabbrowser-tab[visuallyselected][zen-essential] > .tab-stack > .tab-background::after {
+  display: none !important;
+}
+
+:root[bzgp-custom-tab-accent="true"] #tabbrowser-tabs .tabbrowser-tab[visuallyselected] > .tab-stack > .tab-content {
+  color: var(--bzgp-active-tab-text) !important;
+}
+
+#zen-picker-tab-accent-row {
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px var(--panel-padding, 10px);
+}
+
+#zen-picker-tab-accent-row[hidden] {
+  display: none !important;
+}
+
+#zen-picker-tab-accent-input {
+  width: 44px;
+  height: 28px;
+  padding: 2px;
+  border: 1px solid var(--zen-picker-slot-border);
+  border-radius: 6px;
+  cursor: pointer;
+}

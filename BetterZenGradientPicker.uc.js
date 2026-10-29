@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name           BetterZenGradientPicker
-// @version        2.1.2
+// @version        2.1.3
 // @description    A Sine mod which aims to overhaul Zen's gradient picker with tons of new features :))
 // @author         JustAdumbPrsn
 // @include        main
@@ -3045,6 +3045,140 @@
     }
   }
 
+  const TAB_ACCENT_PREF = "zen.theme.active-tab-color";
+  const TAB_ACCENT_DEFAULTS = { light: "#8b5cf6", dark: "#a78bfa" };
+
+  function normalizeTabAccent(value) {
+    const color = String(value ?? "").trim();
+    if (/^#[0-9a-f]{6}$/i.test(color)) {
+      return color.toLowerCase();
+    }
+    if (/^#[0-9a-f]{3}$/i.test(color)) {
+      return "#" + [...color.slice(1)].map(channel => channel.repeat(2)).join("").toLowerCase();
+    }
+    return null;
+  }
+
+  function tabAccentTextColor(color) {
+    const [r, g, b] = [1, 3, 5].map(offset => {
+      const channel = parseInt(color.slice(offset, offset + 2), 16) / 255;
+      return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+    });
+    const luminance = r * 0.2126 + g * 0.7152 + b * 0.0722;
+    return (luminance + 0.05) / 0.05 >= 1.05 / (luminance + 0.05) ? "#000000" : "#ffffff";
+  }
+
+  // Tab-only CSS variables keep selection colors independent of Zen's global
+  // accent, which native workspace rendering and gradient edits keep replacing.
+  class nsZenPickerTabAccent extends nsZenPickerFeature {
+    #private = false;
+    #row = null;
+    #input = null;
+    #label = null;
+    #inputMode = null;
+
+    init(picker) {
+      super.init(picker);
+      const { PrivateBrowsingUtils } = ChromeUtils.importESModule("resource://gre/modules/PrivateBrowsingUtils.sys.mjs");
+      this.#private = PrivateBrowsingUtils.isWindowPrivate(window);
+      Services.prefs.addObserver(TAB_ACCENT_PREF + ".", this);
+      Services.prefs.addObserver("zen.view.window.scheme", this);
+      this.listen(window.matchMedia("(prefers-color-scheme: dark)"), "change", () => this.#update());
+      this.#buildControl();
+      this.listen(picker.panel, "popupshowing", () => {
+        this.#inputMode = null;
+        this.#update();
+      });
+      this.#update();
+    }
+
+    uninit() {
+      Services.prefs.removeObserver(TAB_ACCENT_PREF + ".", this);
+      Services.prefs.removeObserver("zen.view.window.scheme", this);
+      this.#row?.remove();
+      this.#clear();
+      super.uninit();
+    }
+
+    observe(subject, topic) {
+      if (topic === "nsPref:changed") {
+        this.#update();
+      }
+    }
+
+    #mode() {
+      const scheme = Services.prefs.getIntPref("zen.view.window.scheme", 2);
+      return this.#private || scheme === 0 || (scheme !== 1 && window.matchMedia("(prefers-color-scheme: dark)").matches)
+        ? "dark" : "light";
+    }
+
+    #color(mode) {
+      return normalizeTabAccent(Services.prefs.getStringPref(`${TAB_ACCENT_PREF}.${mode}`, TAB_ACCENT_DEFAULTS[mode]));
+    }
+
+    #clear() {
+      const root = document.documentElement;
+      root.removeAttribute("bzgp-custom-tab-accent");
+      root.style.removeProperty("--bzgp-active-tab-color");
+      root.style.removeProperty("--bzgp-active-tab-text");
+    }
+
+    #update() {
+      const enabled = Services.prefs.getBoolPref(TAB_ACCENT_PREF + ".enabled", false);
+      const mode = this.#mode();
+      const color = this.#color(mode);
+      if (this.#row) {
+        this.#row.hidden = !enabled;
+        this.#label.textContent = `Active tab color — ${mode === "dark" ? "Dark" : "Light"}`;
+        // Keep the color dialog's original target if appearance changes while open.
+        if (!this.#inputMode) {
+          this.#input.value = color ?? TAB_ACCENT_DEFAULTS[mode];
+        }
+      }
+      if (!enabled || !color) {
+        this.#clear();
+        return;
+      }
+      const root = document.documentElement;
+      root.style.setProperty("--bzgp-active-tab-color", color);
+      root.style.setProperty("--bzgp-active-tab-text", tabAccentTextColor(color));
+      root.setAttribute("bzgp-custom-tab-accent", "true");
+    }
+
+    #buildControl() {
+      const controls = document.getElementById("PanelUI-zen-gradient-generator-controls");
+      if (!controls) {
+        return;
+      }
+      this.#row = document.createXULElement("hbox");
+      this.#row.id = "zen-picker-tab-accent-row";
+      this.#label = document.createXULElement("label");
+      this.#label.setAttribute("control", "zen-picker-tab-accent-input");
+      this.#input = document.createElementNS("http://www.w3.org/1999/xhtml", "input");
+      this.#input.id = "zen-picker-tab-accent-input";
+      this.#input.type = "color";
+      this.#input.setAttribute("aria-label", "Active tab color");
+      this.listen(this.#input, "click", event => {
+        event.stopPropagation();
+        this.#inputMode = this.#mode();
+      });
+      this.listen(this.#input, "input", () => {
+        const color = normalizeTabAccent(this.#input.value);
+        if (color) {
+          Services.prefs.setStringPref(`${TAB_ACCENT_PREF}.${this.#inputMode ?? this.#mode()}`, color);
+        }
+      });
+      for (const event of ["change", "cancel"]) {
+        this.listen(this.#input, event, () => {
+          this.#inputMode = null;
+          this.#update();
+        });
+      }
+      this.#row.append(this.#label, this.#input);
+      controls.append(this.#row);
+    }
+  }
+
   // Quick reset for grain texture
   class nsZenPickerGrainReset extends nsZenPickerFeature {
     #pointerDown = null;
@@ -3896,7 +4030,8 @@
         new nsZenPickerDynamicTheme(this),
         new nsZenPickerGrainReset(this),
         new nsZenPickerFavorites(this),
-        new nsZenPickerSeparateSchemes(this)
+        new nsZenPickerSeparateSchemes(this),
+        new nsZenPickerTabAccent(this)
       );
       this.#waitForZen();
     }

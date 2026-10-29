@@ -36,6 +36,50 @@
     },
     {
         "type": "checkbox",
+        "property": "zen.theme.active-tab-color.enabled",
+        "label": "Custom Active Tab Color",
+        "margin": "12px 0 4px 0"
+    },
+    {
+        "type": "text",
+        "label": "Choose the active sidebar tab color independently of the gradient. Use the color picker in the gradient editor or enter HEX colors below. Text contrast adjusts automatically. Applies across workspaces.",
+        "margin": "0 0 12px 24px",
+        "size": "12px"
+    },
+    {
+        "type": "string",
+        "property": "zen.theme.active-tab-color.light",
+        "label": "Active Tab \u2014 Light",
+        "defaultValue": "#8b5cf6",
+        "placeholder": "#8b5cf6",
+        "border": "value",
+        "conditions": [
+            {
+                "if": {
+                    "property": "zen.theme.active-tab-color.enabled",
+                    "value": true
+                }
+            }
+        ]
+    },
+    {
+        "type": "string",
+        "property": "zen.theme.active-tab-color.dark",
+        "label": "Active Tab \u2014 Dark",
+        "defaultValue": "#a78bfa",
+        "placeholder": "#a78bfa",
+        "border": "value",
+        "conditions": [
+            {
+                "if": {
+                    "property": "zen.theme.active-tab-color.enabled",
+                    "value": true
+                }
+            }
+        ]
+    },
+    {
+        "type": "checkbox",
         "property": "zen.theme.dynamic-theme-switching",
         "label": "Dynamic Theme",
         "margin": "12px 0 4px 0"
